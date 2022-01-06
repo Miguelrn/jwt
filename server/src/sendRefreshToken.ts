@@ -5,7 +5,8 @@ export const SendRefreshToken = (res: Response, token: string) => {
         'jid', 
         token,
         {
-            httpOnly: true
-        }
+            httpOnly: true,
+            path: '/refresh_token'
+        },
     )
 }
