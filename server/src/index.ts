@@ -9,13 +9,19 @@ import { verify } from "jsonwebtoken";
 import { User } from "./entity/User";
 import { createAccessToken, createRefreshToken } from "./auth";
 import { SendRefreshToken } from "./sendRefreshToken";
+import cors from 'cors';
 
 (async () => {
     const app = express();
-    app.use(cookieParser())
+    app.use(cookieParser());
+    app.use(cors({
+        credentials: true,
+        origin: ['http://localhost:3000', 'https://studio.apollographql.com']
+    }));
     app.get('/', (_req, res) => res.send('hello!'));
     app.post('/refresh_token', async (req, res) => {
         const token = req.cookies.jid;
+        console.log('refresh, ', token)
         if(!token) return res.send({ ok: false, accessToken: ''});
 
         let payload: any = null;
@@ -48,7 +54,7 @@ import { SendRefreshToken } from "./sendRefreshToken";
         context: ({req, res}) => ({req, res})
     });
     await apolloServer.start();
-    apolloServer.applyMiddleware({ app });
+    apolloServer.applyMiddleware({ app, cors: false });
 
     app.listen(3001, () => {
         console.log('escuchando puerto 3001')
