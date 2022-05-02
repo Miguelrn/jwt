@@ -10,5 +10,6 @@ RUN yarn
 
 COPY . /frontend
 
+EXPOSE 3000
 # ENV TSC_WATCHFILE "UseFsEventsWithFallbackDynamicPolling"
 CMD ["yarn", "start"]

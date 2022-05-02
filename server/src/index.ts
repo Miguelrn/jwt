@@ -42,8 +42,20 @@ import cors from 'cors';
 
         return res.send({ ok: true, accessToken: createAccessToken(user)});
     })
-
-    await createConnection()
+    let retries = 5;
+    while(retries){
+        try{
+            await createConnection();
+            break;
+        }
+        catch(e){
+            retries--;
+            console.log(e);
+            console.log(`retries left: ${retries}`);
+            await new Promise(res => setTimeout(res, 5000));
+        }
+    }
+    
 
     const apolloServer = new ApolloServer({
         schema: await buildSchema({

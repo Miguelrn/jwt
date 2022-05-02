@@ -1,164 +1,33 @@
-version: "1.0"
+version: "3.8"
 
 services:
-  ftrs_server_dev:
-    image: ftrs-server-dev:latest
-    container_name: backend_ftrs_dev
-    user: rootless
-    networks:
-      - traefik-net
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    volumes:
-      - /backend/.pytest_cache/
-      - /backend/__pycache__/
-      - /backend/.mypy_cache/
-      - /backend/.venv/
-      - ./backend/:/backend/
-      - ./backend/logs/:/backend/logs/
-      - ./root_pdfs/:/backend/root_pdfs/:ro
-      - ./files/:/backend/files/:ro
-    command: uvicorn app.api.server:app --reload --reload-dir app/ --workers 2 --host 0.0.0.0 --port ${SERVER_PORT_DEV}
-    env_file:
-      - ./backend/.env
-    environment:
-      APP_ENV: development
-    depends_on:
-      - ftrs_db_dev
-      - ftrs_redis_dev
-    restart: unless-stopped
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.ftrs.rule=Host(`ftrs-frontend.dev.localhost`) && PathPrefix("/api")
-      - traefik.http.routers.ftrs.middlewares=strip_prefix,test-compress
-      - traefik.http.middlewares.test-compress.compress=true
-      - traefik.http.middlewares.strip_prefix.stripprefix.prefixes=/api
-      - traefik.docker.network=traefik-net
-      - traefik.http.routers.ftrs.entrypoints=websecure
-      - traefik.http.routers.ftrs.tls=true
-      - traefik.http.services.ftrs.loadbalancer.server.port=${SERVER_PORT_DEV}
-
-  ftrs_db_dev:
-    image: ftrs-postgres-dev:latest
-    build:
-      context: ./postgres
-      dockerfile: Dockerfile
-    container_name: postgres_db_ftrs_dev
-    user: postgres
-    shm_size: 2g
-    networks:
-      - traefik-net
-    environment:
-      PGDATA: /var/lib/postgresql/data
-    volumes:
-      - ftrs_pg_data_dev:/var/lib/postgresql/data/
-      - ./fts-postgres.conf:/etc/postgresql/postgresql.conf
-      - ./.psqlrc:/var/lib/postgresql/.psqlrc
-      #override config to use /etc/postgresql/postgresql.conf
-    command: postgres -c "config_file=/etc/postgresql/postgresql.conf"
-    env_file:
-      - ./.env
-      - ./backend/.env
+  db:
+    image: postgres
     ports:
-      - ${DB_PORT_DEV}:5432
-    restart: unless-stopped
-
-  ftrs_frontend_dev:
-    image: ftrs-frontend-dev:latest
-    container_name: frontend_ftrs_dev
-    networks:
-      - traefik-net
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=pomer
+      - POSTGRES_DB=jwt_database
     volumes:
-      - ./frontend/:/frontend/
-    env_file:
-      - ./frontend/.env.development
-      - ./.env
+      - ./pgdata:/var/lib/postgres/data
+  backend: 
+    image: jwt_server
+    container_name: backend
     depends_on:
-      - ftrs_db_dev
-    restart: unless-stopped
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.ftrsreact.rule=Host(`ftrs-frontend.dev.localhost`)
-      - traefik.docker.network=traefik-net
-      - traefik.http.routers.ftrsreact.middlewares=test-compress
-      - traefik.http.middlewares.test-compress.compress=true
-      - traefik.http.routers.ftrsreact.entrypoints=websecure
-      - traefik.http.routers.ftrsreact.tls=true
-      - traefik.http.services.ftrsreact.loadbalancer.server.port=${FRONTEND_PORT_DEV}
-
-  pg_hero_dev:
-    image: ankane/pghero:latest
-    container_name: pg_hero_dev
-    network_mode: "host"
-    restart: always
-    environment:
-      DATABASE_URL: postgres://postgres:postgres@localhost:${DB_PORT_DEV}/postgres?sslmode=disable
-      PORT: 8900
-    depends_on:
-      - ftrs_db_dev
-
-  celery_worker:
-    image: ftrs-server-dev:latest
-    container_name: celery_worker_1_dev
+      - db
     build:
-      context: ./backend
+      context: ./server
       dockerfile: Dockerfile
-    command: celery -A app.celery.worker:celery_app worker --loglevel INFO --logfile=./celery.log --hostname=worker_1@%h
-    volumes:
-      - /backend/.pytest_cache/
-      - /backend/__pycache__/
-      - /backend/.mypy_cache/
-      - /backend/.venv/
-      - ./backend/:/backend/
-    networks:
-      - traefik-net
-    env_file:
-      - ./backend/.env
-    environment:
-      APP_ENV: development
-    restart: always
+    ports: 
+      - "3001:3001"
+  frontend:
+    image: frontend_jwt
+    container_name: front
     depends_on:
-      - ftrs_redis_dev
-
-  flower:
-    image: mher/flower:latest
-    container_name: flower_dev
+      - db
+    build:
+      context: ./web
+      dockerfile: Dockerfile
     ports:
-      - 5556:5555
-    env_file:
-      - ./backend/.env
-    # volumes:
-    #   - ./backend/app/celery/flowerconfig.py:/flowerconfig.py
-    # command: celery flower --port=5555 --conf=/flowerconfig.py
-    environment:
-      APP_ENV: development
-    networks:
-      - traefik-net
-    restart: always
-    depends_on:
-      - ftrs_redis_dev
-      - celery_worker
-
-  ftrs_redis_dev:
-    image: redis:6-alpine
-    container_name: redis_ftrs_dev
-    networks:
-      - traefik-net
-    environment:
-      APP_ENV: development
-    restart: always
-    ports:
-      - 6379:6379
-
-volumes:
-  ftrs_pg_data_dev:
-  ftrs_logs_dev:
-
-networks:
-  traefik-net:
-    name: traefik-net
-    external: true
+      - "3000:3000"
